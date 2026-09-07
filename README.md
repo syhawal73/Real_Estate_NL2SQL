@@ -422,6 +422,11 @@ LLM settings can also be hot-swapped at runtime via the **Admin Dashboard** (`/a
 > [!NOTE]
 > In development, when SMTP is not configured, email verification and password-reset URLs are logged to the console instead of being sent via email.
 
+Admin Login Credentials:
+Email:    admin@example.com
+Password: ChangeMe_12345!
+Role:     ADMIN
+http://localhost:5173/login?next=%2Fadmin
 ---
 
 ## 🧪 Testing
