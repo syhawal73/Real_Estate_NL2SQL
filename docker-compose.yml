@@ -1,0 +1,105 @@
+# =============================================================================
+# Unified Docker Compose — Real Estate Chatbot
+# =============================================================================
+# Spins up: PostgreSQL 16 · DB Seed · FastAPI Backend · Vite React Frontend
+#
+# Usage:
+#   First run:  ./scripts/setup.sh
+#   Later runs: ./scripts/run.sh
+#   Stop:       ./scripts/stop.sh
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: re_chatbot_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_property_demo
+      POSTGRES_USER: ai_property_demo_user
+      POSTGRES_PASSWORD: ai_property_password_2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_property_demo_user -d ai_property_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Database Seeder (runs once, then exits)
+  # Loads city_centers.csv + properties.csv into PostgreSQL via upserts.
+  # ---------------------------------------------------------------------------
+  db_seed:
+    build:
+      context: ./db_seed
+      dockerfile: Dockerfile
+    container_name: re_chatbot_db_seed
+    restart: "no"
+    environment:
+      - DATABASE_URL=postgresql://ai_property_demo_user:ai_property_password_2026@postgres:5432/ai_property_demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # FastAPI Backend (Python 3.12 + Poetry)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: re_chatbot_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Database — connects to the postgres service via Docker network
+      - DATABASE_URL=postgresql+asyncpg://ai_property_demo_user:ai_property_password_2026@postgres:5432/ai_property_demo
+      - DB_ECHO=false
+      # LLM — connects to LM Studio running on the host machine
+      - LLM_PROVIDER=lmstudio
+      - LLM_MODEL=google/gemma-3-4b
+      - LLM_BASE_URL=http://host.docker.internal:1234/v1
+      - LLM_API_KEY=lm-studio
+      - LLM_TEMPERATURE=0.1
+      - LLM_MAX_TOKENS=1024
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db_seed:
+        condition: service_completed_successfully
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ---------------------------------------------------------------------------
+  # Vite React Frontend (Node 20)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: re_chatbot_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    command: sh -c "npm install && npm run dev"
+
+volumes:
+  postgres_data:
+    name: re_chatbot_postgres_data
