@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://ai_property_demo_user:ai_property_password_2026@host.docker.internal:5432/ai_property_demo
+      - LLM_PROVIDER=lmstudio
+      - LLM_MODEL=google/gemma-3-4b
+      - LLM_BASE_URL=http://host.docker.internal:1234/v1
+      - LLM_API_KEY=lm-studio
+      - LLM_TEMPERATURE=0.1
+      - LLM_MAX_TOKENS=1024
+    command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
